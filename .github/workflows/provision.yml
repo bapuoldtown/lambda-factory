@@ -1,0 +1,102 @@
+name: Provision Lambda
+
+on:
+  workflow_dispatch:
+    inputs:
+      service_name:
+        description: "Service name (lowercase, hyphens, 3-31 chars)"
+        required: true
+        type: string
+      runtime:
+        description: "Runtime"
+        required: true
+        type: choice
+        options:
+          - go
+          - python
+      env:
+        description: "Environment"
+        required: true
+        type: choice
+        default: dev
+        options:
+          - dev
+          - staging
+          - prod
+      memory_mb:
+        description: "Memory (MB)"
+        required: true
+        type: choice
+        default: "512"
+        options: ["128", "256", "512", "1024"]
+      owner:
+        description: "Owner (team or your name)"
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  ACCOUNT_ID: "279473425760"
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Map runtime to SAM values
+        id: rt
+        run: |
+          case "${{ inputs.runtime }}" in
+            go)
+              echo "sam_runtime=provided.al2023" >> $GITHUB_OUTPUT
+              echo "handler=bootstrap" >> $GITHUB_OUTPUT
+              ;;
+            python)
+              echo "sam_runtime=python3.12" >> $GITHUB_OUTPUT
+              echo "handler=app.lambda_handler" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.ACCOUNT_ID }}:role/lambda-factory-provisioner
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup SAM CLI
+        uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+
+      - name: SAM build
+        run: sam build
+
+      - name: SAM deploy
+        run: |
+          sam deploy \
+            --stack-name "lf-${{ inputs.service_name }}-${{ inputs.env }}" \
+            --resolve-s3 \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --region ${{ env.AWS_REGION }} \
+            --parameter-overrides \
+              ServiceName=${{ inputs.service_name }} \
+              Env=${{ inputs.env }} \
+              Runtime=${{ steps.rt.outputs.sam_runtime }} \
+              Handler=${{ steps.rt.outputs.handler }} \
+              MemorySize=${{ inputs.memory_mb }} \
+              Owner=${{ inputs.owner }}
+
+      - name: Summary
+        run: |
+          echo "## Provisioned Successfully" >> $GITHUB_STEP_SUMMARY
+          echo "- Service: lf-${{ inputs.service_name }}-${{ inputs.env }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Runtime: ${{ inputs.runtime }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Memory: ${{ inputs.memory_mb }} MB" >> $GITHUB_STEP_SUMMARY

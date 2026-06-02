@@ -1,0 +1,92 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Lambda Factory - provisions a single Lambda function
+
+Parameters:
+  ServiceName:
+    Type: String
+    AllowedPattern: '^[a-z][a-z0-9-]{2,30}$'
+    Description: Service name (lowercase, hyphens, 3-31 chars)
+  Env:
+    Type: String
+    AllowedValues: [dev, staging, prod]
+    Description: Environment
+  Runtime:
+    Type: String
+    AllowedValues:
+      - provided.al2023
+      - python3.12
+    Description: Lambda runtime
+  Handler:
+    Type: String
+    Description: Handler entry point
+  MemorySize:
+    Type: Number
+    Default: 512
+    MinValue: 128
+    MaxValue: 3008
+  TimeoutSec:
+    Type: Number
+    Default: 30
+    MinValue: 1
+    MaxValue: 900
+  Owner:
+    Type: String
+    Default: unknown
+    Description: Owner team or person
+
+Resources:
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "lf-${ServiceName}-${Env}-exec"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: cw-logs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/lf-${ServiceName}-${Env}:*"
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/lf-${ServiceName}-${Env}"
+      RetentionInDays: 14
+
+  Function:
+    Type: AWS::Serverless::Function
+    DependsOn: LogGroup
+    Properties:
+      FunctionName: !Sub "lf-${ServiceName}-${Env}"
+      Runtime: !Ref Runtime
+      Architectures: [arm64]
+      Handler: !Ref Handler
+      MemorySize: !Ref MemorySize
+      Timeout: !Ref TimeoutSec
+      Role: !GetAtt ExecutionRole.Arn
+      CodeUri: ./placeholder/
+      Environment:
+        Variables:
+          ENV: !Ref Env
+          SERVICE_NAME: !Ref ServiceName
+      Tags:
+        Service: !Ref ServiceName
+        Env: !Ref Env
+        Owner: !Ref Owner
+        ManagedBy: lambda-factory
+
+Outputs:
+  FunctionName:
+    Value: !Ref Function
+  FunctionArn:
+    Value: !GetAtt Function.Arn
