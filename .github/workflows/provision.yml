@@ -105,6 +105,10 @@ jobs:
           go mod tidy
           GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -tags lambda.norpc -o bootstrap main.go
           rm main.go go.mod go.sum 2>/dev/null || true
+          cat > Makefile <<'EOF'
+          build-Function:
+            cp bootstrap $(ARTIFACTS_DIR)/bootstrap
+          EOF
           ls -la
 
       - name: Setup SAM CLI

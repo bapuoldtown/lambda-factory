@@ -66,6 +66,8 @@ Resources:
   Function:
     Type: AWS::Serverless::Function
     DependsOn: LogGroup
+    Metadata:
+      BuildMethod: makefile
     Properties:
       FunctionName: !Sub "lf-${ServiceName}-${Env}"
       Runtime: !Ref Runtime
