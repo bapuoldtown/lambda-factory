@@ -75,7 +75,15 @@ jobs:
           use-installer: true
 
       - name: SAM build
-        run: sam build
+        run: |
+          sam build \
+            --parameter-overrides \
+              ServiceName=${{ inputs.service_name }} \
+              Env=${{ inputs.env }} \
+              Runtime=${{ steps.rt.outputs.sam_runtime }} \
+              Handler=${{ steps.rt.outputs.handler }} \
+              MemorySize=${{ inputs.memory_mb }} \
+              Owner=${{ inputs.owner }}
 
       - name: SAM deploy
         run: |
