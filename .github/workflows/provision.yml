@@ -68,6 +68,44 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::${{ env.ACCOUNT_ID }}:role/lambda-factory-provisioner
           aws-region: ${{ env.AWS_REGION }}
+      - name: Setup Go (if needed)
+        if: inputs.runtime == 'go'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Generate Go placeholder
+        if: inputs.runtime == 'go'
+        run: |
+          rm -rf placeholder
+          mkdir placeholder
+          cd placeholder
+          cat > main.go <<'EOF'
+          package main
+
+          import "github.com/aws/aws-lambda-go/lambda"
+
+          type Response struct {
+            StatusCode int    `json:"statusCode"`
+            Body       string `json:"body"`
+          }
+
+          func handler() (Response, error) {
+            return Response{StatusCode: 200, Body: "placeholder - factory provisioned (go)"}, nil
+          }
+
+          func main() {
+            lambda.Start(handler)
+          }
+          EOF
+          cat > go.mod <<'EOF'
+          module placeholder
+          go 1.22
+          require github.com/aws/aws-lambda-go v1.47.0
+          EOF
+          go mod download
+          GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -tags lambda.norpc -o bootstrap main.go
+          rm main.go go.mod go.sum 2>/dev/null || true
+          ls -la
 
       - name: Setup SAM CLI
         uses: aws-actions/setup-sam@v2
