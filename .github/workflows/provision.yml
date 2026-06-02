@@ -110,6 +110,19 @@ jobs:
           printf 'build-Function:\n\tcp bootstrap $(ARTIFACTS_DIR)/bootstrap\n' > Makefile
           ls -la
 
+      - name: Generate Python placeholder
+        if: inputs.runtime == 'python'
+        run: |
+          rm -rf placeholder
+          mkdir placeholder
+          cd placeholder
+          cat > app.py <<'EOF'
+          def lambda_handler(event, context):
+              return {"statusCode": 200, "body": "placeholder - factory provisioned (python)"}
+          EOF
+          printf 'build-Function:\n\tcp app.py $(ARTIFACTS_DIR)/app.py\n' > Makefile
+          ls -la
+
       - name: Setup SAM CLI
         uses: aws-actions/setup-sam@v2
         with:
